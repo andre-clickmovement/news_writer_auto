@@ -1,0 +1,73 @@
+name: Daily Newsletter Collection
+
+on:
+  schedule:
+    # Run every day at 8:00 AM EST (1:00 PM UTC)
+    # Note: During Daylight Saving Time (EDT), this runs at 9:00 AM EDT
+    - cron: '0 13 * * *'
+  workflow_dispatch:  # Allow manual trigger
+    inputs:
+      date:
+        description: 'Date to collect (YYYY-MM-DD), defaults to yesterday'
+        required: false
+        type: string
+
+env:
+  PYTHON_VERSION: '3.11'
+
+jobs:
+  collect-and-export:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run daily automation
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          TINYEMAIL_API_KEY: ${{ secrets.TINYEMAIL_API_KEY }}
+          BEEHIIV_API_KEY_GROUP1: ${{ secrets.BEEHIIV_API_KEY_GROUP1 }}
+          BEEHIIV_API_KEY_GROUP2: ${{ secrets.BEEHIIV_API_KEY_GROUP2 }}
+        run: |
+          if [ -n "${{ github.event.inputs.date }}" ]; then
+            python daily_automation.py --date "${{ github.event.inputs.date }}" --no-email
+          else
+            python daily_automation.py --no-email
+          fi
+
+      - name: Upload CSV artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: newsletter-reports-${{ github.run_number }}
+          path: exports/*.csv
+          retention-days: 30
+          if-no-files-found: warn
+
+      - name: Display summary
+        run: |
+          echo "## Newsletter Collection Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Date:** $(date -d 'yesterday' '+%Y-%m-%d' 2>/dev/null || date -v-1d '+%Y-%m-%d')" >> $GITHUB_STEP_SUMMARY
+          echo "**Run:** ${{ github.run_number }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if ls exports/*.csv 1> /dev/null 2>&1; then
+            echo "### Exported Files:" >> $GITHUB_STEP_SUMMARY
+            for f in exports/*.csv; do
+              echo "- \`$(basename $f)\`" >> $GITHUB_STEP_SUMMARY
+            done
+          else
+            echo "No CSV files were generated." >> $GITHUB_STEP_SUMMARY
+          fi
