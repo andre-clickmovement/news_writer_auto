@@ -38,7 +38,10 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
-          TINYEMAIL_API_KEY: ${{ secrets.TINYEMAIL_API_KEY }}
+          TINYEMAIL_API_KEY_AC: ${{ secrets.TINYEMAIL_API_KEY_AC }}
+          TINYEMAIL_API_KEY_CD: ${{ secrets.TINYEMAIL_API_KEY_CD }}
+          TINYEMAIL_API_KEY_WR: ${{ secrets.TINYEMAIL_API_KEY_WR }}
+          TINYEMAIL_API_KEY_PW: ${{ secrets.TINYEMAIL_API_KEY_PW }}
           BEEHIIV_API_KEY_GROUP1: ${{ secrets.BEEHIIV_API_KEY_GROUP1 }}
           BEEHIIV_API_KEY_GROUP2: ${{ secrets.BEEHIIV_API_KEY_GROUP2 }}
         run: |
