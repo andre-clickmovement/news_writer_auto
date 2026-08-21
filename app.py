@@ -370,10 +370,10 @@ class ContentProcessor:
             r'[A-Z][a-z]+\s+[A-Z][a-z]+\s+is\s+a\s+(?:reporter|writer|correspondent).*',
             r'Story tips can be sent to.*',
             r'CLICK HERE TO.*',
-            r'Subscribe.*newsletter.*',
-            r'Follow.*on.*',
+            r'Subscribe\s+to\s+[^.]*newsletter[^.]*\.',
+            r'Follow\s+(?:us\s+)?on\s+(?:Twitter|Facebook|X|Instagram|YouTube)[^.]*\.',
             r'@[\w]+',
-            r'\s*\d{4}.*',
+            r'(?:\u00a9|\(c\))?\s*\d{4}\s+[^.]{0,60}(?:LLC|Inc\.?|Corp\.?|Network|Media Group|Media)\b\.?',
             r'All [Rr]ights [Rr]eserved',
         ]
 
@@ -448,7 +448,6 @@ ARTICLE:
             response = self.client.messages.create(
                 model="claude-sonnet-4-5-20250929",
                 max_tokens=3000,
-                temperature=0.7,
                 messages=[{"role": "user", "content": prompt}]
             )
 
@@ -560,7 +559,6 @@ ARTICLE:
             response = self.client.messages.create(
                 model="claude-sonnet-4-5-20250929",
                 max_tokens=3000,
-                temperature=0.8,
                 messages=[{"role": "user", "content": prompt}]
             )
 
