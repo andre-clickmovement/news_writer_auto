@@ -2,7 +2,7 @@ import streamlit as st
 import feedparser
 import requests
 from bs4 import BeautifulSoup
-import anthropic
+from openai import OpenAI
 import datetime
 import hashlib
 import time
@@ -18,6 +18,62 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
+from types import SimpleNamespace
+
+
+# ============= OPENROUTER CLIENT (anthropic-SDK-compatible shim) =============
+class OpenRouterClient:
+    """
+    Minimal drop-in replacement for anthropic.Anthropic().
+
+    Exposes .messages.create(model=..., max_tokens=..., messages=[...], system=...)
+    and returns an object where response.content[0].text holds the reply, so the
+    rest of the app doesn't need to change.
+    """
+
+    BASE_URL = "https://openrouter.ai/api/v1"
+
+    class _Messages:
+        def __init__(self, outer):
+            self._outer = outer
+
+        def create(self, model=None, max_tokens=3000, messages=None, system=None,
+                   temperature=None, **kwargs):
+            chat_messages = []
+            if system:
+                chat_messages.append({"role": "system", "content": system})
+            chat_messages.extend(messages or [])
+
+            params = {
+                "model": model or self._outer.default_model,
+                "max_tokens": max_tokens,
+                "messages": chat_messages,
+            }
+            if temperature is not None:
+                params["temperature"] = temperature
+
+            completion = self._outer._client.chat.completions.create(
+                extra_headers=self._outer.extra_headers,
+                **params
+            )
+
+            if not getattr(completion, "choices", None):
+                err = getattr(completion, "error", None)
+                raise RuntimeError(f"OpenRouter returned no choices: {err or completion}")
+
+            text = completion.choices[0].message.content or ""
+            return SimpleNamespace(content=[SimpleNamespace(text=text)])
+
+    def __init__(self, api_key: str, default_model: str, site_url: str = "", app_name: str = ""):
+        self._client = OpenAI(base_url=self.BASE_URL, api_key=api_key)
+        self.default_model = default_model
+        self.extra_headers = {}
+        if site_url:
+            self.extra_headers["HTTP-Referer"] = site_url
+        if app_name:
+            self.extra_headers["X-Title"] = app_name
+        self.messages = self._Messages(self)
+
 
 # ============= CONFIGURATION =============
 class ClickMovementConfig:
@@ -109,7 +165,8 @@ class ClickMovementConfig:
     MIN_WORDS = 350
     MAX_WORDS = 800
     ARTICLES_PER_SITE = 10
-    ANTHROPIC_KEY = st.secrets.get("anthropic_key", "")
+    OPENROUTER_KEY = st.secrets.get("openrouter_key", "")
+    OPENROUTER_MODEL = st.secrets.get("openrouter_model", "anthropic/claude-sonnet-4.5")
     SUPABASE_URL = st.secrets.get("supabase_url", "")
     SUPABASE_KEY = st.secrets.get("supabase_key", "")
 
@@ -326,7 +383,11 @@ class NewsFetcher:
 # ============= CONTENT PROCESSOR =============
 class ContentProcessor:
     def __init__(self):
-        self.client = anthropic.Anthropic(api_key=ClickMovementConfig.ANTHROPIC_KEY) if ClickMovementConfig.ANTHROPIC_KEY else None
+        self.client = OpenRouterClient(
+            api_key=ClickMovementConfig.OPENROUTER_KEY,
+            default_model=ClickMovementConfig.OPENROUTER_MODEL,
+            app_name="Click Movement News Writer",
+        ) if ClickMovementConfig.OPENROUTER_KEY else None
         self.new_prompt_template = self._load_new_prompt_template()
 
     def _load_new_prompt_template(self) -> str:
@@ -446,7 +507,7 @@ ARTICLE:
 
         try:
             response = self.client.messages.create(
-                model="claude-sonnet-4-5-20250929",
+                model=ClickMovementConfig.OPENROUTER_MODEL,
                 max_tokens=3000,
                 messages=[{"role": "user", "content": prompt}]
             )
@@ -557,7 +618,7 @@ ARTICLE:
 
         try:
             response = self.client.messages.create(
-                model="claude-sonnet-4-5-20250929",
+                model=ClickMovementConfig.OPENROUTER_MODEL,
                 max_tokens=3000,
                 messages=[{"role": "user", "content": prompt}]
             )
